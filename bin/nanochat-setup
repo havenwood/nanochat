@@ -1,0 +1,186 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Setup script for Ruby nanochat - downloads pretrained checkpoint
+#
+# Usage:
+#   nanochat-setup [--tiny|--url URL]
+
+require 'fileutils'
+require 'net/http'
+require 'uri'
+require 'optparse'
+
+CACHE_DIR = File.expand_path('~/.cache/nanochat')
+CHECKPOINT_URLS = {
+  tiny: 'https://github.com/havenwood/nanochat/releases/download/v0.1.0/nanochat-tiny-d4.tar.gz'
+}.freeze
+
+def parse_options
+  options = {model: :tiny}
+
+  OptionParser.new do |opts|
+    opts.banner = 'Usage: nanochat-setup [options]'
+    opts.separator ''
+    opts.separator 'Download and setup a pretrained nanochat model'
+    opts.separator ''
+
+    opts.on('--tiny', 'Download tiny d4 model (default, ~30MB)') do
+      options[:model] = :tiny
+    end
+
+    opts.on('--url URL', 'Download from custom URL') do |url|
+      options[:url] = url
+    end
+
+    opts.on('-h', '--help', 'Show this help') do
+      puts opts
+      exit
+    end
+  end.parse!
+
+  options
+end
+
+def download_file(url, destination)
+  puts "Downloading from: #{url}"
+
+  uri = URI(url)
+  Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+    request = Net::HTTP::Get.new(uri)
+
+    http.request(request) do |response|
+      case response
+      when Net::HTTPSuccess
+        total_size = response['content-length']&.to_i
+        downloaded = 0
+
+        File.open(destination, 'wb') do |file|
+          response.read_body do |chunk|
+            file.write(chunk)
+            downloaded += chunk.size
+
+            if total_size
+              percent = (downloaded.to_f / total_size * 100).round(1)
+              print "\r  Progress: #{percent}% (#{downloaded / 1_024_024}MB / #{total_size / 1_024_024}MB)"
+            else
+              print "\r  Downloaded: #{downloaded / 1_024_024}MB"
+            end
+          end
+        end
+        puts # Newline after progress
+      when Net::HTTPRedirection
+        # Follow redirect
+        redirect_url = response['location']
+        puts "  Following redirect to: #{redirect_url}"
+        return download_file(redirect_url, destination)
+      else
+        raise "Failed to download: #{response.code} #{response.message}"
+      end
+    end
+  end
+end
+
+def extract_tarball(archive_path, destination)
+  puts "Extracting to: #{destination}"
+
+  # Use tar command for extraction
+  system('tar', '-xzf', archive_path, '-C', destination, '--strip-components=1') ||
+    raise('Failed to extract tarball')
+
+  puts 'Extraction complete'
+end
+
+def verify_checkpoint(cache_dir)
+  model_path = File.join(cache_dir, 'model.pt')
+  tokenizer_path = File.join(cache_dir, 'tokenizer', 'tokenizer.json')
+
+  missing = []
+  missing << 'model.pt' unless File.exist?(model_path)
+  missing << 'tokenizer/tokenizer.json' unless File.exist?(tokenizer_path)
+
+  if missing.empty?
+    puts 'Checkpoint verified:'
+    puts "  Model: #{model_path}"
+    puts "  Tokenizer: #{tokenizer_path}"
+    true
+  else
+    puts "Missing files: #{missing.join(', ')}"
+    false
+  end
+end
+
+def main
+  options = parse_options
+
+  puts 'Nanochat Setup'
+  puts '=' * 50
+  puts
+
+  # Check if already setup
+  if File.exist?(File.join(CACHE_DIR, 'model.pt'))
+    puts 'Checkpoint already exists at ~/.cache/nanochat/'
+    print 'Overwrite? [y/N]: '
+    response = $stdin.gets&.chomp&.downcase
+
+    unless %w[y yes].include?(response)
+      puts 'Setup cancelled'
+      exit 0
+    end
+  end
+
+  # Prepare cache directory
+  FileUtils.mkdir_p(CACHE_DIR)
+
+  # Determine download URL
+  url = options[:url] || CHECKPOINT_URLS[options[:model]]
+
+  unless url
+    puts "No URL available for model: #{options[:model]}"
+    exit 1
+  end
+
+  # Download
+  archive_path = File.join(CACHE_DIR, 'download.tar.gz')
+
+  begin
+    download_file(url, archive_path)
+  rescue StandardError => e
+    puts
+    puts "Download failed: #{e.message}"
+    puts
+    puts 'Alternative: Train your own model with python-nanochat'
+    puts '  bash bin/speedrun.sh  # ~30 mins on CPU'
+    puts "  Checkpoint will be at: #{CACHE_DIR}"
+    exit 1
+  end
+
+  # Extract
+  begin
+    extract_tarball(archive_path, CACHE_DIR)
+  rescue StandardError => e
+    puts "Extraction failed: #{e.message}"
+    exit 1
+  ensure
+    FileUtils.rm_f(archive_path)
+  end
+
+  # Verify
+  puts
+  unless verify_checkpoint(CACHE_DIR)
+    puts
+    puts 'Setup incomplete - checkpoint verification failed'
+    exit 1
+  end
+
+  puts
+  puts '=' * 50
+  puts 'Setup complete!'
+  puts
+  puts 'Try it out:'
+  puts '  ruby examples/chat_cli.rb'
+  puts '  ruby examples/chat_web.rb  # Web UI on http://localhost:8000'
+  puts
+end
+
+main if __FILE__ == $PROGRAM_NAME

@@ -1,0 +1,122 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Package a trained nanochat checkpoint for distribution
+#
+# This creates a tarball suitable for uploading to GitHub releases.
+# End users can then download it with `nanochat-setup`.
+#
+# Usage:
+#   bin/package-checkpoint [--output nanochat-tiny-d4.tar.gz]
+
+require 'fileutils'
+require 'optparse'
+
+CACHE_DIR = File.expand_path('~/.cache/nanochat')
+
+def parse_options
+  options = {output: 'nanochat-tiny-d4.tar.gz'}
+
+  OptionParser.new do |opts|
+    opts.banner = 'Usage: package-checkpoint [options]'
+    opts.separator ''
+    opts.separator 'Package a trained checkpoint for distribution'
+    opts.separator ''
+
+    opts.on('-o', '--output PATH', 'Output tarball path (default: nanochat-tiny-d4.tar.gz)') do |path|
+      options[:output] = path
+    end
+
+    opts.on('-h', '--help', 'Show this help') do
+      puts opts
+      exit
+    end
+  end.parse!
+
+  options
+end
+
+def verify_checkpoint
+  model_path = File.join(CACHE_DIR, 'model.pt')
+  tokenizer_path = File.join(CACHE_DIR, 'tokenizer', 'tokenizer.json')
+
+  missing = []
+  missing << 'model.pt' unless File.exist?(model_path)
+  missing << 'tokenizer/tokenizer.json' unless File.exist?(tokenizer_path)
+
+  if missing.empty?
+    puts "Checkpoint verified at: #{CACHE_DIR}"
+    puts "  Model: #{model_path}"
+    puts "  Tokenizer: #{tokenizer_path}"
+    true
+  else
+    puts "Missing files: #{missing.join(', ')}"
+    puts
+    puts 'Train a checkpoint first:'
+    puts '  bash bin/train-with-python-nanochat.sh'
+    false
+  end
+end
+
+def package_checkpoint(output_path)
+  output_path = File.expand_path(output_path)
+  cache_parent = File.dirname(CACHE_DIR)
+  cache_name = File.basename(CACHE_DIR)
+
+  puts
+  puts 'Creating tarball...'
+  puts "  Source: #{CACHE_DIR}"
+  puts "  Output: #{output_path}"
+  puts
+
+  # Create tarball
+  success = system(
+    'tar', '-czf', output_path,
+    '-C', cache_parent,
+    cache_name
+  )
+
+  unless success
+    puts 'Failed to create tarball'
+    exit 1
+  end
+
+  # Get size
+  size_mb = (File.size(output_path) / (1024.0 * 1024.0)).round(1)
+
+  puts "Tarball created: #{output_path}"
+  puts "  Size: #{size_mb} MB"
+  puts
+end
+
+def show_next_steps(output_path)
+  puts '=' * 70
+  puts 'Next Steps'
+  puts '=' * 70
+  puts
+  puts 'Test locally:'
+  puts "  tar -xzf #{output_path} -C #{File.dirname(CACHE_DIR)}"
+  puts '  ruby examples/chat_cli.rb'
+  puts
+  puts 'Upload to GitHub releases and users can download with nanochat-setup'
+  puts
+end
+
+def main
+  options = parse_options
+
+  puts 'Package Nanochat Checkpoint'
+  puts '=' * 70
+  puts
+
+  # Verify checkpoint exists
+  exit 1 unless verify_checkpoint
+
+  # Package it
+  package_checkpoint(options[:output])
+
+  # Show next steps
+  show_next_steps(options[:output])
+end
+
+main if __FILE__ == $PROGRAM_NAME

@@ -1,0 +1,46 @@
+---
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        ruby: ['3.4']
+      fail-fast: false
+    env:
+      LIBTORCH_VERSION: 2.9.0
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/libtorch
+          key: libtorch-${{ env.LIBTORCH_VERSION }}
+        id: cache-libtorch
+
+      - name: Download LibTorch
+        if: steps.cache-libtorch.outputs.cache-hit != 'true'
+        run: |
+          cd ~
+          wget -q -O libtorch.zip \
+            https://download.pytorch.org/libtorch/cpu/libtorch-shared-with-deps-$LIBTORCH_VERSION%2Bcpu.zip
+          unzip -q libtorch.zip
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: false
+
+      - name: Configure torch-rb build
+        run: bundle config build.torch-rb --with-torch-dir=$HOME/libtorch
+
+      - name: Install dependencies
+        run: bundle install --jobs 4 --retry 3
+
+      - run: bundle exec rake

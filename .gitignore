@@ -1,0 +1,29 @@
+# Gem artifacts
+/.bundle/
+/doc/
+/pkg/
+/tmp/
+*.gem
+
+# Bundler
+Gemfile.lock
+
+# Test coverage
+/coverage/
+
+# macOS
+.DS_Store
+
+# IDE
+/.idea/
+/.vscode/
+*.swp
+*.swo
+
+# Model checkpoints (users download these)
+/*.pt
+/*.pth
+/checkpoints/
+
+# Cached data
+/.cache/
