@@ -80,6 +80,22 @@ class EngineTest < Minitest::Test
     assert_kind_of String, output
   end
 
+  def test_top_p_nucleus_sampling
+    cpu_device = Torch.device('cpu')
+    model = Nanochat::GPT.new(@config)
+    engine = Nanochat::Engine.new(model: model, tokenizer: @tokenizer, device: cpu_device)
+
+    logits = Torch.tensor([[1.0, 2.0, 3.0, 4.0]])
+
+    samples = []
+    10.times do
+      sample = engine.send(:sample, logits, 1.0, nil, 0.9)
+      samples << sample[0, 0].item
+    end
+
+    refute_includes samples, 0, 'Top-p sampling should filter out lowest probability token'
+  end
+
   def test_generate_with_empty_prompt
     cpu_device = Torch.device('cpu')
     model = Nanochat::GPT.new(@config)

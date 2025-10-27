@@ -103,7 +103,7 @@ module Nanochat
 
     private
 
-    def sample(logits, temperature, top_k, _top_p)
+    def sample(logits, temperature, top_k, top_p)
       return logits.argmax(-1, keepdim: true) if temperature.zero?
 
       if top_k
@@ -113,6 +113,35 @@ module Nanochat
         probs = Torch::NN::F.softmax(vals, dim: -1)
         choice = Torch.multinomial(probs, num_samples: 1)
         return idx.gather(1, choice)
+      end
+
+      # Top-p (nucleus) sampling
+      if top_p && top_p < 1.0
+        scaled_logits = logits / temperature
+        probs = Torch::NN::F.softmax(scaled_logits, dim: -1)
+
+        # Sort probabilities in descending order
+        sorted_probs, sorted_indices = probs.sort(dim: -1, descending: true)
+
+        # Compute cumulative probabilities
+        cumulative_probs = sorted_probs.cumsum(dim: -1)
+
+        # Remove tokens with cumulative probability above threshold
+        # Keep at least one token (the highest probability one)
+        sorted_indices_to_remove = Torch.gt(cumulative_probs, top_p)
+        sorted_indices_to_remove[0..-1, 0] = false
+
+        # Zero out probabilities for removed tokens
+        sorted_probs[sorted_indices_to_remove] = 0.0
+
+        # Renormalize probabilities
+        sorted_probs /= sorted_probs.sum(dim: -1, keepdim: true)
+
+        # Sample from filtered distribution
+        choice = Torch.multinomial(sorted_probs, num_samples: 1)
+
+        # Map back to original vocabulary indices
+        return sorted_indices.gather(1, choice)
       end
 
       scaled_logits = logits / temperature
