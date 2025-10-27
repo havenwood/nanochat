@@ -112,7 +112,7 @@ module Nanochat
         vals /= temperature
         probs = Torch::NN::F.softmax(vals, dim: -1)
         choice = Torch.multinomial(probs, num_samples: 1)
-        return idx.gather(1, choice)
+        idx.gather(1, choice)
       end
 
       # Top-p (nucleus) sampling
@@ -141,7 +141,7 @@ module Nanochat
         choice = Torch.multinomial(sorted_probs, num_samples: 1)
 
         # Map back to original vocabulary indices
-        return sorted_indices.gather(1, choice)
+        sorted_indices.gather(1, choice)
       end
 
       scaled_logits = logits / temperature
