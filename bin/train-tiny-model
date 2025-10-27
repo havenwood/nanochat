@@ -1,0 +1,212 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Train a tiny nanochat model using Python nanochat's CPU training script
+#
+# This wraps Python nanochat's dev/runcpu.sh to make it easy for Ruby users
+# to train a minimal checkpoint without needing GPU clusters.
+#
+# Attribution: Uses training scripts from https://github.com/karpathy/nanochat
+#
+# Usage:
+#   bin/train-tiny-model [--quick|--standard]
+
+require 'English'
+require 'fileutils'
+require 'optparse'
+
+PYTHON_NANOCHAT_DIR = File.expand_path('python-nanochat')
+CACHE_DIR = File.expand_path('~/.cache/nanochat')
+
+def parse_options
+  options = {mode: :quick}
+
+  OptionParser.new do |opts|
+    opts.banner = 'Usage: train-tiny-model [options]'
+    opts.separator ''
+    opts.separator 'Train a tiny nanochat checkpoint using Python nanochat'
+    opts.separator ''
+
+    opts.on('--quick', 'Quick training (d4, 50 iterations, ~30 mins CPU, default)') do
+      options[:mode] = :quick
+    end
+
+    opts.on('--standard', 'Standard training (d4, 500 iterations, ~5 hours CPU)') do
+      options[:mode] = :standard
+    end
+
+    opts.on('-h', '--help', 'Show this help') do
+      puts opts
+      exit
+    end
+  end.parse!
+
+  options
+end
+
+def check_python_nanochat
+  unless Dir.exist?(PYTHON_NANOCHAT_DIR)
+    puts "❌ Python nanochat not found at: #{PYTHON_NANOCHAT_DIR}"
+    puts
+    puts 'Clone it first:'
+    puts '  git clone https://github.com/karpathy/nanochat python-nanochat'
+    puts
+    exit 1
+  end
+
+  script_path = File.join(PYTHON_NANOCHAT_DIR, 'dev', 'runcpu.sh')
+  unless File.exist?(script_path)
+    puts "❌ Training script not found: #{script_path}"
+    exit 1
+  end
+
+  puts "✅ Python nanochat found at: #{PYTHON_NANOCHAT_DIR}"
+end
+
+def train_model(mode)
+  puts
+  puts '🚀 Starting Training'
+  puts '=' * 70
+  puts
+  puts "Mode: #{mode}"
+  puts 'This will train a tiny d4 model (4 layers, minimal for demos)'
+  puts "Output: #{CACHE_DIR}"
+  puts
+  puts '⏱️  Estimated time:'
+  puts '  - Quick mode: ~30 minutes on CPU'
+  puts '  - Standard mode: ~5 hours on CPU'
+  puts
+  puts '📝 Attribution: Using training scripts from'
+  puts '   https://github.com/karpathy/nanochat by Andrej Karpathy'
+  puts
+  puts '=' * 70
+  puts
+
+  # Change to python-nanochat directory
+  Dir.chdir(PYTHON_NANOCHAT_DIR) do
+    if mode == :quick
+      # Use the existing dev/runcpu.sh as-is (50 iterations)
+      puts '▶️  Running: bash dev/runcpu.sh'
+      puts
+      system('bash', 'dev/runcpu.sh') || raise('Training failed')
+    else
+      # Modify runcpu.sh to run more iterations for better quality
+      puts '▶️  Running modified training (500 iterations)'
+      puts
+
+      # Create a modified version inline
+      modified_script = File.read('dev/runcpu.sh')
+                            .gsub('--num_iterations=50', '--num_iterations=500')
+                            .gsub('--num_iterations=100', '--num_iterations=1000')
+
+      IO.popen('bash', 'w') do |bash|
+        bash.puts modified_script
+      end
+
+      raise 'Training failed' unless $CHILD_STATUS.success?
+    end
+  end
+
+  puts
+  puts '✅ Training complete!'
+end
+
+def verify_checkpoint
+  puts
+  puts 'Verifying checkpoint...'
+
+  model_path = File.join(CACHE_DIR, 'model.pt')
+  tokenizer_path = File.join(CACHE_DIR, 'tokenizer', 'tokenizer.json')
+
+  missing = []
+  missing << 'model.pt' unless File.exist?(model_path)
+  missing << 'tokenizer/tokenizer.json' unless File.exist?(tokenizer_path)
+
+  if missing.empty?
+    puts '✅ Checkpoint verified:'
+    puts "  Model: #{model_path}"
+    puts "  Tokenizer: #{tokenizer_path}"
+    true
+  else
+    puts "❌ Missing files: #{missing.join(', ')}"
+    false
+  end
+end
+
+def show_next_steps
+  puts
+  puts '=' * 70
+  puts '🎯 Next Steps - Use Your Model in Ruby'
+  puts '=' * 70
+  puts
+  puts '# Interactive chat'
+  puts 'ruby examples/chat_cli.rb'
+  puts
+  puts '# Web UI (visit http://localhost:8000)'
+  puts 'ruby examples/chat_web.rb'
+  puts
+  puts '# Generate text'
+  puts "ruby examples/generate_text.rb 'Once upon a time'"
+  puts
+  puts '# Fine-tune on your data'
+  puts 'ruby examples/finetune.rb --data my_data.txt --output custom.pt'
+  puts
+  puts '=' * 70
+  puts
+  puts '📦 Optional: Package this checkpoint for distribution'
+  puts
+  puts "tar -czf nanochat-tiny-d4.tar.gz -C #{File.dirname(CACHE_DIR)} #{File.basename(CACHE_DIR)}"
+  puts
+end
+
+def main
+  options = parse_options
+
+  puts '🔥 Train Tiny Nanochat Model'
+  puts '=' * 70
+  puts
+
+  # Check prerequisites
+  check_python_nanochat
+
+  # Warn about existing checkpoint
+  if File.exist?(File.join(CACHE_DIR, 'model.pt'))
+    puts
+    puts '⚠️  Warning: Checkpoint already exists'
+    puts "    Location: #{CACHE_DIR}"
+    print 'Overwrite with new training? [y/N]: '
+    response = $stdin.gets&.chomp&.downcase
+
+    unless %w[y yes].include?(response)
+      puts 'Training cancelled'
+      exit 0
+    end
+
+    FileUtils.rm_rf(CACHE_DIR)
+  end
+
+  # Train
+  begin
+    train_model(options[:mode])
+  rescue StandardError => e
+    puts
+    puts "❌ Training failed: #{e.message}"
+    puts
+    puts 'Troubleshooting:'
+    puts '  - Make sure Python nanochat dependencies are installed'
+    puts '  - Check python-nanochat/README.md for setup instructions'
+    exit 1
+  end
+
+  # Verify
+  unless verify_checkpoint
+    puts
+    puts '❌ Training completed but checkpoint verification failed'
+    exit 1
+  end
+
+  # Success!
+  show_next_steps
+end
+
+main if __FILE__ == $PROGRAM_NAME

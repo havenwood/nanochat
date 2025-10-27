@@ -1,0 +1,29 @@
+Ruby is a dynamic, open source programming language with a focus on simplicity and productivity. It has an elegant syntax that is natural to read and easy to write.
+
+Ruby was created by Yukihiro Matsumoto (Matz) in the mid-1990s. The language combines the best features of Perl, Smalltalk, Eiffel, Ada, and Lisp. Ruby is designed to be intuitive and to make programming enjoyable.
+
+Key features of Ruby include:
+- Object-oriented: Everything is an object, including primitive types
+- Dynamic typing: Variables can hold values of any type
+- Garbage collection: Automatic memory management
+- First-class functions: Methods and blocks are first-class citizens
+- Metaprogramming: Ruby code can modify itself at runtime
+- Multiple paradigms: Supports procedural, object-oriented, and functional programming
+
+Ruby on Rails is a popular web application framework written in Ruby. It follows the Model-View-Controller (MVC) architectural pattern and emphasizes convention over configuration. Rails has been used to build many successful web applications including GitHub, Shopify, and Airbnb.
+
+The Ruby community values principles like:
+- Principle of Least Surprise: Ruby behaves in a way that minimizes confusion
+- Optimize for programmer happiness: The language should be enjoyable to use
+- MINASWAN: Matz is nice, and so we are nice (community motto)
+
+Ruby has a rich ecosystem of libraries called gems, managed by RubyGems. The standard library includes powerful tools for text processing, networking, and system administration. Popular gems include:
+- Sinatra: A lightweight web framework
+- RSpec: A testing framework
+- Pry: An interactive debugger
+- ActiveRecord: Object-relational mapping
+- Thor: A toolkit for building command-line interfaces
+
+Ruby continues to evolve with new features. Ruby 3.0 introduced significant performance improvements, including a Just-In-Time (JIT) compiler. Ruby 3.4 added pattern matching enhancements and improved garbage collection.
+
+Learning Ruby is a great choice for beginners due to its readable syntax and welcoming community. For experienced developers, Ruby offers powerful metaprogramming capabilities and the flexibility to solve problems in multiple ways.

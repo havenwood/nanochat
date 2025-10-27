@@ -1,0 +1,39 @@
+AllCops:
+  TargetRubyVersion: 3.4
+  NewCops: enable
+  Exclude:
+    - 'enumi/**/*'
+    - 'python-nanochat/**/*'
+
+plugins:
+  - rubocop-minitest
+  - rubocop-rake
+
+Layout/SpaceInsideHashLiteralBraces:
+  EnforcedStyle: no_space
+
+# Exclude test files and examples from documentation requirements
+Style/Documentation:
+  Exclude:
+    - "test/**/*"
+    - "enumi/test/**/*"
+    - "test_*.rb"
+    - "examples/**/*"
+
+# Allow more assertions in setup/config tests
+Minitest/MultipleAssertions:
+  Max: 6
+
+# Disable metrics since ML code is intentionally dense
+Metrics:
+  Enabled: false
+
+# Allow verify_checkpoint naming (it's not a predicate, it verifies and exits)
+Naming/PredicateMethod:
+  Exclude:
+    - "bin/**/*"
+
+# Allow empty blocks in benchmarks (streaming blocks that discard output)
+Lint/EmptyBlock:
+  Exclude:
+    - "examples/benchmark.rb"
